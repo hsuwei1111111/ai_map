@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>臺北市民間合作涼適點地圖</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts - Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind Custom Colors for Milk Tea Theme -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            milktea: {
+              50: '#FDFBF7',   // Cream White
+              100: '#F8F4EE',  // Light Milk Tea / Foam
+              200: '#EFE5D8',  // Soft Beige
+              300: '#DFCDB8',  // Warm Sand
+              400: '#C8AE93',  // Milk Tea Accent
+              500: '#AB8B6E',  // Roasted Milk Tea
+              600: '#8C6D58',  // Caramel Brown
+              700: '#6E5241',  // Deep Cocoa
+              800: '#523A2E',  // Dark Coffee
+              900: '#38251C'   // Espresso
+            }
+          },
+          fontFamily: {
+            sans: ['Noto Sans TC', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: #F8F4EE;
+      color: #523A2E;
+    }
+    
+    /* Custom Scrollbar for Milk Tea Theme */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F8F4EE;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #DFCDB8;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #C8AE93;
+    }
+
+    /* Custom Leaflet Map styling */
+    .leaflet-popup-content-wrapper {
+      background-color: #FDFBF7;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px -5px rgba(82, 58, 46, 0.15);
+      border: 1px solid #EFE5D8;
+      padding: 4px;
+    }
+    .leaflet-popup-tip {
+      background-color: #FDFBF7;
+    }
+    .leaflet-container {
+      font-family: 'Noto Sans TC', sans-serif;
+    }
+    
+    /* Custom Pulse Marker Animation */
+    .custom-div-icon {
+      background: transparent;
+      border: none;
+    }
+    .marker-pin {
+      width: 32px;
+      height: 32px;
+      border-radius: 50% 50% 50% 0;
+      background: #8C6D58;
+      position: absolute;
+      transform: rotate(-45deg);
+      left: 50%;
+      top: 50%;
+      margin: -20px 0 0 -16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 8px rgba(82, 58, 46, 0.3);
+      transition: all 0.2s ease-in-out;
+    }
+    .marker-pin i {
+      transform: rotate(45deg);
+      color: #FDFBF7;
+      font-size: 14px;
+    }
+    .marker-pin.active {
+      background: #523A2E;
+      transform: rotate(-45deg) scale(1.2);
+    }
+  </style>
+</head>
+
+<body class="h-screen w-screen flex flex-col overflow-hidden bg-milktea-100 text-milktea-800">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-milktea-50 border-b border-milktea-200 px-4 py-3 flex items-center justify-between z-20 shadow-sm shrink-0">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-milktea-500 text-milktea-50 flex items-center justify-center shadow-md">
+        <i class="fa-solid fa-snowflake text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-lg md:text-xl font-bold text-milktea-800 tracking-tight flex items-center gap-2">
+          臺北市民間合作涼適點
+          <span id="total-count-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-milktea-200 text-milktea-700 font-medium border border-milktea-300">
+            共 28 處
+          </span>
+        </h1>
+        <p class="text-xs text-milktea-600 hidden sm:block">提供舒適避暑場所、冷氣冰水與休憩座位，讓您炎夏沁涼一夏</p>
+      </div>
+    </div>
+
+    <!-- Mobile Menu Toggle Button -->
+    <button id="toggle-sidebar-btn" class="md:hidden flex items-center justify-center p-2 rounded-lg bg-milktea-200 text-milktea-800 hover:bg-milktea-300 transition">
+      <i class="fa-solid fa-sliders text-lg"></i>
+    </button>
+  </header>
+
+  <!-- Main Content Layout -->
+  <div class="flex-1 flex flex-col md:flex-row relative overflow-hidden">
+    
+    <!-- Left Sidebar / Control Panel -->
+    <aside id="sidebar" class="w-full md:w-96 bg-milktea-50 border-r border-milktea-200 flex flex-col z-10 transition-all duration-300 ease-in-out absolute md:relative inset-0 h-full md:h-auto translate-x-full md:translate-x-0">
+      
+      <!-- Mobile Close Button Header -->
+      <div class="p-3 md:hidden border-b border-milktea-200 flex justify-between items-center bg-milktea-100">
+        <span class="font-semibold text-milktea-700"><i class="fa-solid fa-filter mr-1"></i> 搜尋與篩選</span>
+        <button id="close-sidebar-btn" class="text-milktea-600 hover:text-milktea-900 p-1">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Filters Section -->
+      <div class="p-4 border-b border-milktea-200 space-y-3 bg-milktea-50">
+        
+        <!-- Search Input -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-milktea-400"></i>
+          <input type="text" id="search-input" placeholder="搜尋名稱、地址..." class="w-full pl-9 pr-3 py-2 text-sm bg-white rounded-xl border border-milktea-200 focus:outline-none focus:ring-2 focus:ring-milktea-400 focus:border-transparent transition placeholder-milktea-400">
+        </div>
+
+        <!-- District Selector -->
+        <div>
+          <label class="block text-xs font-semibold text-milktea-600 uppercase tracking-wider mb-1">行政區</label>
+          <select id="district-select" class="w-full py-2 px-3 text-sm bg-white rounded-xl border border-milktea-200 focus:outline-none focus:ring-2 focus:ring-milktea-400 text-milktea-800">
+            <option value="ALL">全部行政區</option>
+            <!-- Options populated dynamically -->
+          </select>
+        </div>
+
+        <!-- Facility Toggles -->
+        <div>
+          <label class="block text-xs font-semibold text-milktea-600 uppercase tracking-wider mb-1.5">設施與服務篩選</label>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <label class="flex items-center space-x-2 p-2 rounded-lg border border-milktea-200 bg-white cursor-pointer hover:bg-milktea-100 transition">
+              <input type="checkbox" id="filter-ac" class="rounded text-milktea-600 focus:ring-milktea-400">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-snowflake text-sky-500"></i> 冷氣開放</span>
+            </label>
+            <label class="flex items-center space-x-2 p-2 rounded-lg border border-milktea-200 bg-white cursor-pointer hover:bg-milktea-100 transition">
+              <input type="checkbox" id="filter-water" class="rounded text-milktea-600 focus:ring-milktea-400">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-glass-water text-blue-500"></i> 飲水設施</span>
+            </label>
+            <label class="flex items-center space-x-2 p-2 rounded-lg border border-milktea-200 bg-white cursor-pointer hover:bg-milktea-100 transition">
+              <input type="checkbox" id="filter-restroom" class="rounded text-milktea-600 focus:ring-milktea-400">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-restroom text-amber-600"></i> 提供廁所</span>
+            </label>
+            <label class="flex items-center space-x-2 p-2 rounded-lg border border-milktea-200 bg-white cursor-pointer hover:bg-milktea-100 transition">
+              <input type="checkbox" id="filter-seat" class="rounded text-milktea-600 focus:ring-milktea-400">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-chair text-emerald-600"></i> 休息座位</span>
+            </label>
+            <label class="flex items-center space-x-2 p-2 rounded-lg border border-milktea-200 bg-white cursor-pointer hover:bg-milktea-100 transition col-span-2">
+              <input type="checkbox" id="filter-accessible" class="rounded text-milktea-600 focus:ring-milktea-400">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-wheelchair text-purple-500"></i> 無障礙座位</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Reset Button -->
+        <button id="reset-filters-btn" class="w-full py-1.5 text-xs text-milktea-600 hover:text-milktea-800 border border-dashed border-milktea-300 rounded-lg hover:bg-milktea-100 transition flex items-center justify-center gap-1">
+          <i class="fa-solid fa-rotate-left"></i> 重置所有篩選條件
+        </button>
+      </div>
+
+      <!-- Spots List Counter Header -->
+      <div class="px-4 py-2 bg-milktea-100 border-b border-milktea-200 flex justify-between items-center">
+        <span class="text-xs font-medium text-milktea-600">顯示據點清單</span>
+        <span id="filtered-count" class="text-xs font-bold text-milktea-700 bg-milktea-200 px-2 py-0.5 rounded-full">28 筆</span>
+      </div>
+
+      <!-- Scrollable Spots List -->
+      <div id="spots-list" class="flex-1 overflow-y-auto divide-y divide-milktea-100 p-2 space-y-2">
+        <!-- Dynamic spot cards generated here -->
+      </div>
+    </aside>
+
+    <!-- Right Map Canvas Area -->
+    <main class="flex-1 relative h-full">
+      <div id="map" class="w-full h-full"></div>
+      
+      <!-- Floating Map Helper / Recenter Button -->
+      <button id="recenter-btn" class="absolute bottom-6 right-6 z-[400] bg-white border border-milktea-200 text-milktea-700 px-4 py-2.5 rounded-2xl shadow-lg hover:bg-milktea-50 transition flex items-center gap-2 font-medium text-sm">
+        <i class="fa-solid fa-crosshairs text-milktea-500"></i> 顯示全覽
+      </button>
+    </main>
+  </div>
+
+  <script>
+    // Embedded 28 authentic Taipei Cool Spots data
+    const coolSpotsData = [
+      { id: 1, name: "第一銀行忠孝路分行", type: "室內", district: "中正區", address: "臺北市中正區忠孝東路2段94號", lng: 121.530054, lat: 25.0428591, phone: "(02)23416111", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 2, name: "第一銀行信維分行", type: "室內", district: "大安區", address: "臺北市大安區復興南路1段368、370號", lng: 121.5433051, lat: 25.0347309, phone: "(02)27557241", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 3, name: "第一銀行大同分行", type: "室內", district: "大同區", address: "臺北市大同區重慶北路3段60號1、2樓", lng: 121.5134262, lat: 25.0656424, phone: "(02)25913251", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 4, name: "第一銀行城東分行", type: "室內", district: "中山區", address: "臺北市中山區南京東路3段103號", lng: 121.5395419, lat: 25.0522519, phone: "(02)25062881", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 5, name: "第一銀行民生分行", type: "室內", district: "松山區", address: "臺北市松山區民生東路3段131號", lng: 121.5478553, lat: 25.0579248, phone: "(02)27138512", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 6, name: "第一銀行八德分行", type: "室內", district: "大安區", address: "臺北市大安區敦化南路1段111號", lng: 121.5493301, lat: 25.0473354, phone: "(02)27318878", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 7, name: "第一銀行內湖分行", type: "室內", district: "內湖區", address: "臺北市內湖區成功路3段143、145號", lng: 121.5900079, lat: 25.07958, phone: "(02)27932311", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 8, name: "第一銀行延吉分行", type: "室內", district: "大安區", address: "臺北市大安區忠孝東路4段289號", lng: 121.5545478, lat: 25.0417013, phone: "(02)27315741", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 9, name: "第一銀行大安分行", type: "室內", district: "大安區", address: "臺北市大安區信義路4段382號", lng: 121.5559536, lat: 25.0328752, phone: "(02)27556811", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 10, name: "第一銀行信義分行", type: "室內", district: "大安區", address: "臺北市大安區信義路3段7號", lng: 121.5334013, lat: 25.0338443, phone: "(02)23256811", hours: "am9:00~pm15:30", fan: true, ac: true, restroom: false, seat: true, water: true, accessible: false, note: "" },
+      { id: 11, name: "南山人壽-總公司", type: "室內", district: "信義區", address: "臺北市信義區莊敬路168號", lng: 121.5611273, lat: 25.0317437, phone: "(02)87588888", hours: "週一至週五08:30-17:00", fan: false, ac: true, restroom: false, seat: true, water: false, accessible: false, note: "現場禁止飲食" },
+      { id: 12, name: "南山人壽台北大安分公司", type: "室內", district: "大安區", address: "臺北市大安區新生南路一段137之4號", lng: 121.5330186, lat: 25.0366944, phone: "(02)25687777#87556", hours: "週一至週五 08:30–17:00", fan: false, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 13, name: "南山人壽-客戶服務台北分部", type: "室內", district: "中山區", address: "臺北市中山區民權東路二段144號", lng: 121.5339294, lat: 25.06211642, phone: "(02)25687611#87611", hours: "週一至週五08：30-17：00", fan: false, ac: true, restroom: true, seat: true, water: true, accessible: true, note: "" },
+      { id: 14, name: "松山奉天宮大殿內", type: "室內", district: "信義區", address: "臺北市信義區福德街221巷12號", lng: 121.5847093, lat: 25.0372514, phone: "(02)27279765#232", hours: "週一至周日 06:00－21:00", fan: true, ac: false, restroom: true, seat: false, water: true, accessible: false, note: "" },
+      { id: 15, name: "財團法人臺北市天師宮", type: "室內", district: "大同區", address: "臺北市大同區延平北路3段97、99號", lng: 121.5110207, lat: 25.0678732, phone: "(02)25956499", hours: "週一到週日 08:00-20:00", fan: true, ac: false, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 16, name: "台北市木柵忠順廟", type: "室內/戶外", district: "文山區", address: "臺北市文山區順興里中崙路13號", lng: 121.5646964, lat: 24.9836771, phone: "(02)29394852", hours: "6:00~20:00", fan: true, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 17, name: "東門福德宮", type: "室內/戶外", district: "中正區", address: "臺北市中正區東門里林森南路61巷15弄6號", lng: 121.5228033, lat: 25.0397935, phone: "0978165955", hours: "8:00~16:00 週一到週日", fan: true, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 18, name: "臺北市萬和兒童暨社區共好服務中心", type: "室內", district: "大同區", address: "臺北市大同區環河北路二段187號1樓", lng: 121.5092548, lat: 25.0684156, phone: "(02)25910109#15", hours: "周一至周五 09：00-18：00", fan: true, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 19, name: "弘道松山社區據點", type: "室內", district: "松山區", address: "臺北市松山區復興北路451號1樓", lng: 121.544483, lat: 25.0639844, phone: "(02)66131314", hours: "週一、三、五 14:30-17:00 / 週二、四 13:00-17:00", fan: false, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 20, name: "信義馬光中醫診所", type: "室內", district: "信義區", address: "臺北市信義區莊敬路8號", lng: 121.5611496, lat: 25.0323523, phone: "(02)27000599", hours: "周一~周五 08:20–11:30, 13:50–17:00, 17:40–21:00； 週六 08:20–11:30, 13:50–17:00", fan: false, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 21, name: "迪化馬光中醫診所", type: "室內", district: "大同區", address: "臺北市大同區民生西路266號", lng: 121.5134514, lat: 25.0568726, phone: "(02)25526616", hours: "周一~周五 08:20–11:30, 13:50–17:00, 17:40–21:00； 週六 08:20–11:30, 13:50–17:00", fan: false, ac: true, restroom: true, seat: true, water: true, accessible: true, note: "" },
+      { id: 22, name: "大華行/竹木造咖", type: "室內", district: "大同區", address: "臺北市大同區迪化街一段161號", lng: 121.509681, lat: 25.058494, phone: "(02)25530482", hours: "週一到週日 10:00-18:30", fan: true, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 23, name: "北玄財神宮", type: "室內/戶外", district: "中山區", address: "臺北市中山區吉林路343巷35號", lng: 121.5323019, lat: 25.0643391, phone: "(02)25958879", hours: "週一至週六10:00-20:00", fan: true, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 24, name: "德利泰中藥材互動體驗館", type: "室內", district: "大同區", address: "臺北市大同區甘谷街26號1樓", lng: 121.5109287, lat: 25.0527075, phone: "(02)25584433", hours: "週一～週六 10:00～18:00", fan: false, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 25, name: "黃長生藥行", type: "室內/戶外", district: "大同區", address: "臺北市大同區迪化街一段134號", lng: 121.509719, lat: 25.057363, phone: "(02)25532156", hours: "每日9:30-17:00", fan: false, ac: true, restroom: true, seat: true, water: true, accessible: false, note: "" },
+      { id: 26, name: "生態綠咖啡 OKO cafe", type: "室內", district: "大同區", address: "臺北市大同區大有里迪化街一段167號", lng: 121.509668, lat: 25.058638, phone: "(02)25570057", hours: "週一至週日 10：00-18：00", fan: false, ac: true, restroom: true, seat: false, water: true, accessible: false, note: "" },
+      { id: 27, name: "愛不囉嗦庇護工場", type: "室內", district: "大同區", address: "臺北市大同區承德路三段212-5號一樓", lng: 121.518118, lat: 25.0711327, phone: "(02)25869321", hours: "週一至週五 08:30–19:00", fan: true, ac: true, restroom: false, seat: false, water: true, accessible: false, note: "" },
+      { id: 28, name: "財團法人台北市景福宮", type: "室內/戶外", district: "中山區", address: "臺北市中山區德惠街11號", lng: 121.5255602, lat: 25.066813, phone: "(02)25969325", hours: "08:30～20:30", fan: false, ac: false, restroom: true, seat: true, water: true, accessible: false, note: "" }
+    ];
+
+    let map;
+    let markersLayer = L.layerGroup();
+    let markerMap = new Map(); // Store spot.id -> marker instance
+    let activeSpotId = null;
+
+    // Initialize Application
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      populateDistrictOptions();
+      renderSpotsList(coolSpotsData);
+      renderMapMarkers(coolSpotsData);
+      setupEventListeners();
+    });
+
+    function initMap() {
+      // Default centered in Taipei
+      map = L.map('map', {
+        zoomControl: false
+      }).setView([25.048, 121.54], 13);
+
+      // Add Zoom Control to top right
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      // CartoDB Positron - Warm Light Tiles suitable for Milk Tea Aesthetic
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }).addTo(map);
+
+      markersLayer.addTo(map);
+    }
+
+    function populateDistrictOptions() {
+      const districts = [...new Set(coolSpotsData.map(item => item.district))].sort();
+      const select = document.getElementById('district-select');
+      districts.forEach(dist => {
+        const option = document.createElement('option');
+        option.value = dist;
+        option.textContent = dist;
+        select.appendChild(option);
+      });
+    }
+
+    function createPopupHTML(spot) {
+      return `
+        <div class="p-2 max-w-xs text-milktea-800">
+          <div class="flex items-center justify-between gap-2 border-b border-milktea-200 pb-2 mb-2">
+            <span class="text-xs px-2 py-0.5 rounded-md font-semibold bg-milktea-200 text-milktea-800">${spot.district}</span>
+            <span class="text-xs text-milktea-600 bg-milktea-100 border border-milktea-200 px-1.5 py-0.5 rounded">${spot.type}</span>
+          </div>
+          <h3 class="font-bold text-base text-milktea-900 mb-1 leading-snug">${spot.name}</h3>
+          
+          <div class="text-xs text-milktea-700 space-y-1.5 my-2">
+            <p class="flex items-start gap-1.5">
+              <i class="fa-solid fa-location-dot text-milktea-500 mt-0.5 shrink-0"></i>
+              <span>${spot.address}</span>
+            </p>
+            <p class="flex items-center gap-1.5">
+              <i class="fa-solid fa-clock text-milktea-500 shrink-0"></i>
+              <span>${spot.hours}</span>
+            </p>
+            <p class="flex items-center gap-1.5">
+              <i class="fa-solid fa-phone text-milktea-500 shrink-0"></i>
+              <a href="tel:${spot.phone}" class="text-milktea-700 hover:underline font-medium">${spot.phone}</a>
+            </p>
+            ${spot.note ? `<p class="flex items-center gap-1.5 text-amber-700 bg-amber-50 p-1 rounded border border-amber-200"><i class="fa-solid fa-circle-info"></i> 備註：${spot.note}</p>` : ''}
+          </div>
+
+          <!-- Feature Badges -->
+          <div class="pt-2 border-t border-milktea-200 flex flex-wrap gap-1 text-[11px]">
+            ${spot.ac ? `<span class="px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded flex items-center gap-1"><i class="fa-solid fa-snowflake"></i>冷氣</span>` : ''}
+            ${spot.water ? `<span class="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded flex items-center gap-1"><i class="fa-solid fa-glass-water"></i>飲水</span>` : ''}
+            ${spot.restroom ? `<span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded flex items-center gap-1"><i class="fa-solid fa-restroom"></i>廁所</span>` : ''}
+            ${spot.seat ? `<span class="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded flex items-center gap-1"><i class="fa-solid fa-chair"></i>座位</span>` : ''}
+            ${spot.accessible ? `<span class="px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded flex items-center gap-1"><i class="fa-solid fa-wheelchair"></i>無障礙</span>` : ''}
+            ${spot.fan ? `<span class="px-1.5 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 rounded flex items-center gap-1"><i class="fa-solid fa-fan"></i>風扇</span>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMapMarkers(spots) {
+      markersLayer.clearLayers();
+      markerMap.clear();
+
+      if (spots.length === 0) return;
+
+      const bounds = L.latLngBounds();
+
+      spots.forEach(spot => {
+        const customIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div class="marker-pin ${spot.id === activeSpotId ? 'active' : ''}"><i class="fa-solid fa-temperature-arrow-down"></i></div>`,
+          iconSize: [30, 42],
+          iconAnchor: [15, 42]
+        });
+
+        const marker = L.marker([spot.lat, spot.lng], { icon: customIcon });
+        marker.bindPopup(createPopupHTML(spot));
+
+        marker.on('click', () => {
+          highlightSpotCard(spot.id);
+        });
+
+        markersLayer.addLayer(marker);
+        markerMap.set(spot.id, marker);
+        bounds.extend([spot.lat, spot.lng]);
+      });
+
+      // Fit bounds if initialization or full view
+      if (spots.length > 0) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      }
+    }
+
+    function renderSpotsList(spots) {
+      const container = document.getElementById('spots-list');
+      const countEl = document.getElementById('filtered-count');
+      countEl.textContent = `${spots.length} 筆`;
+
+      if (spots.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-10 text-milktea-500">
+            <i class="fa-solid fa-circle-exclamation text-3xl mb-2"></i>
+            <p class="text-sm">沒有符合條件的涼適點</p>
+            <p class="text-xs text-milktea-400 mt-1">請試著放寬搜尋或篩選條件</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = spots.map(spot => `
+        <div id="spot-card-${spot.id}" onclick="selectSpot(${spot.id})" class="p-3 bg-white rounded-xl border border-milktea-200 hover:border-milktea-400 shadow-sm hover:shadow-md transition cursor-pointer group">
+          <div class="flex items-start justify-between gap-2">
+            <h4 class="font-bold text-sm text-milktea-900 group-hover:text-milktea-600 transition leading-snug">${spot.name}</h4>
+            <span class="text-[11px] px-2 py-0.5 rounded bg-milktea-100 text-milktea-700 shrink-0 font-medium">${spot.district}</span>
+          </div>
+
+          <p class="text-xs text-milktea-600 mt-1.5 flex items-center gap-1.5">
+            <i class="fa-solid fa-location-dot text-milktea-400"></i>
+            <span class="truncate">${spot.address}</span>
+          </p>
+
+          <p class="text-xs text-milktea-500 mt-1 flex items-center gap-1.5">
+            <i class="fa-solid fa-clock text-milktea-400"></i>
+            <span>${spot.hours}</span>
+          </p>
+
+          <div class="mt-2.5 pt-2 border-t border-milktea-100 flex flex-wrap gap-1 text-[10px]">
+            ${spot.ac ? `<span class="px-1.5 py-0.5 bg-sky-50 text-sky-700 rounded"><i class="fa-solid fa-snowflake mr-0.5"></i>冷氣</span>` : ''}
+            ${spot.water ? `<span class="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded"><i class="fa-solid fa-glass-water mr-0.5"></i>飲水</span>` : ''}
+            ${spot.restroom ? `<span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded"><i class="fa-solid fa-restroom mr-0.5"></i>廁所</span>` : ''}
+            ${spot.seat ? `<span class="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded"><i class="fa-solid fa-chair mr-0.5"></i>座位</span>` : ''}
+            ${spot.accessible ? `<span class="px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded"><i class="fa-solid fa-wheelchair mr-0.5"></i>無障礙</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterData() {
+      const searchTxt = document.getElementById('search-input').value.trim().toLowerCase();
+      const districtVal = document.getElementById('district-select').value;
+      const acVal = document.getElementById('filter-ac').checked;
+      const waterVal = document.getElementById('filter-water').checked;
+      const restroomVal = document.getElementById('filter-restroom').checked;
+      const seatVal = document.getElementById('filter-seat').checked;
+      const accessibleVal = document.getElementById('filter-accessible').checked;
+
+      const filtered = coolSpotsData.filter(spot => {
+        // District filter
+        if (districtVal !== 'ALL' && spot.district !== districtVal) return false;
+
+        // Search text
+        if (searchTxt && !spot.name.toLowerCase().includes(searchTxt) && !spot.address.toLowerCase().includes(searchTxt)) {
+          return false;
+        }
+
+        // Checkbox facilities
+        if (acVal && !spot.ac) return false;
+        if (waterVal && !spot.water) return false;
+        if (restroomVal && !spot.restroom) return false;
+        if (seatVal && !spot.seat) return false;
+        if (accessibleVal && !spot.accessible) return false;
+
+        return true;
+      });
+
+      renderSpotsList(filtered);
+      renderMapMarkers(filtered);
+    }
+
+    function selectSpot(id) {
+      activeSpotId = id;
+      const spot = coolSpotsData.find(item => item.id === id);
+      if (!spot) return;
+
+      // Center map smoothly
+      map.flyTo([spot.lat, spot.lng], 16, { duration: 1.2 });
+
+      // Open popup
+      const marker = markerMap.get(id);
+      if (marker) {
+        marker.openPopup();
+      }
+
+      highlightSpotCard(id);
+
+      // On mobile view, collapse sidebar when item is clicked
+      if (window.innerWidth < 768) {
+        document.getElementById('sidebar').classList.add('translate-x-full');
+      }
+    }
+
+    function highlightSpotCard(id) {
+      // Clear previous active card styling
+      document.querySelectorAll('#spots-list > div').forEach(el => {
+        el.classList.remove('ring-2', 'ring-milktea-500', 'bg-milktea-100');
+        el.classList.add('bg-white');
+      });
+
+      // Highlight active card
+      const activeCard = document.getElementById(`spot-card-${id}`);
+      if (activeCard) {
+        activeCard.classList.remove('bg-white');
+        activeCard.classList.add('ring-2', 'ring-milktea-500', 'bg-milktea-100');
+        activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    function setupEventListeners() {
+      // Input listeners
+      document.getElementById('search-input').addEventListener('input', filterData);
+      document.getElementById('district-select').addEventListener('change', filterData);
+      document.getElementById('filter-ac').addEventListener('change', filterData);
+      document.getElementById('filter-water').addEventListener('change', filterData);
+      document.getElementById('filter-restroom').addEventListener('change', filterData);
+      document.getElementById('filter-seat').addEventListener('change', filterData);
+      document.getElementById('filter-accessible').addEventListener('change', filterData);
+
+      // Reset filters button
+      document.getElementById('reset-filters-btn').addEventListener('click', () => {
+        document.getElementById('search-input').value = '';
+        document.getElementById('district-select').value = 'ALL';
+        document.getElementById('filter-ac').checked = false;
+        document.getElementById('filter-water').checked = false;
+        document.getElementById('filter-restroom').checked = false;
+        document.getElementById('filter-seat').checked = false;
+        document.getElementById('filter-accessible').checked = false;
+        filterData();
+      });
+
+      // Recenter button
+      document.getElementById('recenter-btn').addEventListener('click', () => {
+        filterData();
+      });
+
+      // Mobile sidebar toggle
+      const sidebar = document.getElementById('sidebar');
+      document.getElementById('toggle-sidebar-btn').addEventListener('click', () => {
+        sidebar.classList.toggle('translate-x-full');
+      });
+      document.getElementById('close-sidebar-btn').addEventListener('click', () => {
+        sidebar.classList.add('translate-x-full');
+      });
+    }
+  </script>
+</body>
+</html>
